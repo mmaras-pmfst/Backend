@@ -2,6 +2,8 @@ const express=require("express");
 
 const app=express();
 
+const Kontakt=require("./models/kontakti");
+
 const cors=require("cors");
 app.use(cors());
 app.use(express.json());
@@ -36,50 +38,70 @@ let kontakti=[
 ]
 
 app.get('/api/kontakti',(req,res)=>{
-    res.json(kontakti);
+    Kontakt.find({}).then(result=>{
+        res.json(result)
+    })
 })
 
-app.get('/api/kontakti/:id',(req,res)=>{
-    const id=Number(req.params.id);
-    const kontakt=kontakti.find(k=>k.id===id);
-    if(kontakt){
-        res.json(kontakt);
-    }
-    else{
-        res.status(404).end();
-    }
+app.get('/api/kontakti/:id',(req,res,next)=>{
+    const id=req.params.id;
+    Kontakt.findById(id).then(result=>{
+        if(result){
+            res.json(result)
+        }else{
+            res.status(404).end()
+        }
+    }).catch(err=> next(err))
 });
 
-app.delete('/api/kontakti/:id',(req,res)=>{
-    const id=Number(req.params.id);
-    kontakti=kontakti.filter(k=>k.id!==id);
-    res.status(204).end();
+app.delete('/api/kontakti/:id',(req,res,next)=>{
+    const id=req.params.id;
+    console.log("Brisanje")
+    Kontakt.findByIdAndRemove(id).then(result=>{
+        res.status(204).end()
+    }).catch(err=>next(err))
 });
 
-app.put('/api/kontakti/:id',(req,res)=>{
-    const id=Number(req.params.id);
+app.put('/api/kontakti/:id',(req,res,next)=>{
+    const id=req.params.id;
     const podatak=req.body;
-    kontakti=kontakti.map(k => k.id !== id ? k : podatak);
-    res.json(podatak);
 
-})
-
-app.post('/api/kontakti',(req,res)=>{
-    const maxId=kontakti.length>0 ? Math.max(...kontakti.map(k => k.id)) : 0;
-    const podataka=req.body;
-    if(!podataka.imeprezime){
-        return res.status(400).json({
-            error:"Nedostaje unos ime i prezime!"
-        })
-    }
     const kontakt={
-        id:maxId+1,
-        imeprezime:podataka.imeprezime,
-        email:podataka.email
+        imeprezime:podatak.imeprezime,
+        email:podatak.email
     }
-    kontakti=kontakti.concat(kontakt);
-    res.json(kontakt);
+    Kontakt.findByIdAndUpdate(id,kontakt,{new:true}).then(result=>{
+        res.json(result)
+    }).catch(err=>next(err))
+
 })
+
+app.post('/api/kontakti',(req,res,next)=>{
+    const podatak=req.body;
+    
+    const kontakt=new Kontakt({
+        imeprezime:podatak.imeprezime,
+        email:podatak.email
+    })
+    kontakt.save().then(result=>{
+        console.log("Kontakt dodan");
+        res.json(result);
+    }).catch(err=>next(err));
+    
+})
+
+const errorHandler=(err, req, res, next)=>{
+    console.log("Middleware za pogreške!");
+    if(err.name="CastError"){
+        return res.status(400).send({error:"Pogrešan format ID parametra"})
+    }else if(err.name=="MongoParserError"){
+        return res.status(400).send({error:"Krivi format podatka"})
+    }else if(err.name==="ValidationError"){
+        return res.status(400).send({error:"Krivi format podatka"})
+    }
+}
+app.use(errorHandler)
+
 const PORT=process.env.PORT || 3001;
 app.listen(PORT,()=>{
     console.log(`Server is running on port ${PORT}`);
